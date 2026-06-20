@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { askNova } from "./utils/gemini";
+import "./App.css";
 const colorPickerStyle = `
 input[type="color"]::-webkit-color-swatch-wrapper {
   padding: 0;
@@ -8,6 +9,19 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 input[type="color"]::-webkit-color-swatch {
   border: none;
   border-radius: 50%;
+}
+  @keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 4px rgba(168,85,247,0.15);
+  }
+
+  50% {
+    box-shadow: 0 0 10px rgba(168,85,247,0.30);
+  }
+
+  100% {
+    box-shadow: 0 0 4px rgba(168,85,247,0.15);
+  }
 }
   @keyframes gradient {
   0% { background-position: 0% 50%; }
@@ -31,6 +45,7 @@ function App() {
   }, [chat]);
   const [activeTab, setActiveTab] = useState("home");
   const [message, setMessage] = useState("");
+  const [taskInput, setTaskInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [goals, setGoals] = useState(
     JSON.parse(
@@ -192,12 +207,26 @@ function App() {
     goals.filter((goal) => goal.done).length;
 
   const goalPercentage =
-    goals.length
-      ? Math.round(
+  goals.length
+    ? Math.round(
         (completedGoals / goals.length) * 100
       )
-      : 0;
-  const isMobile = window.innerWidth < 768;
+    : 0;
+
+const toggleGoal = (index) => {
+  setGoals(
+    goals.map((goal, i) =>
+      i === index
+        ? {
+            ...goal,
+            done: !goal.done,
+          }
+        : goal
+    )
+  );
+};
+
+const isMobile = window.innerWidth < 768;
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -544,7 +573,47 @@ function App() {
           {activeTab === "tasks" && (
             <>
               <h1>✅ Tasks</h1>
+              <div
+  style={{
+    display: "flex",
+    gap: "10px",
+    marginBottom: "20px",
+  }}
+>
+  <input
+    value={taskInput}
+    onChange={(e) => setTaskInput(e.target.value)}
+    placeholder="Add Task..."
+    style={{
+      flex: 1,
+      padding: "12px",
+      borderRadius: "12px",
+      border: "none",
+      outline: "none",
+    }}
+  />
 
+  <button
+    onClick={() => {
+      if (!taskInput.trim()) return;
+
+      setNote((prev) => prev + "\n- " + taskInput);
+
+      setTaskInput("");
+    }}
+    style={{
+      padding: "12px 18px",
+      border: "none",
+      borderRadius: "12px",
+      background: "#8B5CF6",
+      color: "white",
+      cursor: "pointer",
+      fontWeight: "600",
+    }}
+  >
+    Add
+  </button>
+</div>
               <div
                 style={{
                   gridArea: "main",
@@ -558,56 +627,54 @@ function App() {
 
                   return (
                     <div
-                      key={index}
-                      onClick={() => {
-                        if (completedTasks.includes(cleanTask)) {
-                          setCompletedTasks(
-                            completedTasks.filter(
-                              (t) => t !== cleanTask
-                            )
-                          );
-                        } else {
-                          setCompletedTasks([
-                            ...completedTasks,
-                            cleanTask,
-                          ]);
-                        }
-                      }}
-                      style={{
-                        background: "rgba(255,255,255,0.05)",
-                        padding: "15px",
-                        borderRadius: "12px",
-                        marginBottom: "10px",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        cursor: "pointer",
-                        transition: "0.3s",
-
-
-                        textDecoration:
-                          completedTasks.includes(cleanTask)
-                            ? "line-through"
-                            : "none",
-
-                        opacity:
-                          completedTasks.includes(cleanTask)
-                            ? 0.5
-                            : 1,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform =
-                          "translateX(8px)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform =
-                          "translateX(0)";
-                      }}
-                    >
+  key={index}
+  className={`task-card ${
+    completedTasks.includes(cleanTask)
+      ? "completed"
+      : ""
+  }`}
+  onClick={() => {
+    if (completedTasks.includes(cleanTask)) {
+      setCompletedTasks(
+        completedTasks.filter(
+          (t) => t !== cleanTask
+        )
+      );
+    } else {
+      setCompletedTasks([
+        ...completedTasks,
+        cleanTask,
+      ]);
+    }
+  }}
+>
                       {completedTasks.includes(cleanTask)
                         ? "☑"
                         : getTaskIcon(cleanTask)}
 
                       {" "}
                       {cleanTask}
+                     <button
+  className="delete-task"
+  onClick={(e) => {
+    e.stopPropagation();
+
+    const updatedNote = note
+      .split("\n")
+      .filter((line) => {
+        const cleanLine = line
+          .replace("-", "")
+          .trim();
+
+        return cleanLine !== cleanTask;
+      })
+      .join("\n");
+
+    setNote(updatedNote);
+  }}
+>
+  ✕
+</button>
                     </div>
                   );
                 })}
@@ -616,7 +683,18 @@ function App() {
           )}
           {activeTab === "goals" && (
             <>
-              <h1>🎯 Goals</h1>
+              <h1>
+  🎯 Goals
+  <span
+    style={{
+      color:"#A78BFA",
+      fontSize:"18px",
+      marginLeft:"10px"
+    }}
+  >
+    ({goals.length})
+  </span>
+</h1>
 
               <div
                 style={{
@@ -627,66 +705,105 @@ function App() {
                 }}
               >
                 <>
-                  <input
-                    type="search"
-                    value={goalInput}
-                    onChange={(e) =>
-                      setGoalInput(e.target.value)
-                    }
-                    placeholder="Add Goal..."
-                    spellCheck={false}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    style={{
-                      padding: "10px",
-                      borderRadius: "10px",
-                      marginRight: "10px",
-                    }}
-                  />
+  <div
+    style={{
+      display: "flex",
+      gap: "12px",
+      alignItems: "center",
+      marginBottom: "25px",
+      flexWrap: "wrap",
+    }}
+  >
+    <input
+      type="search"
+      value={goalInput}
+      onChange={(e) =>
+        setGoalInput(e.target.value)
+      }
+      placeholder="Add Goal..."
+      spellCheck={false}
+      style={{
+        padding: "14px 18px",
+        borderRadius: "14px",
+        border: "1px solid rgba(255,255,255,0.1)",
+        background: "rgba(255,255,255,0.05)",
+        color: "white",
+        width: "320px",
+        outline: "none",
+      }}
+    />
 
-                  <button
-                    onClick={() => {
-                      if (!goalInput.trim()) return;
+    <button
+      onClick={() => {
+        if (!goalInput.trim()) return;
 
-                      setGoals([
-                        ...goals,
-                        {
-                          text: goalInput,
-                          done: false,
-                        },
-                      ]);
+        setGoals([
+          ...goals,
+          {
+            text: goalInput,
+            done: false,
+          },
+        ]);
 
-                      setGoalInput("");
-                    }}
-                  >
-                    Add Goal
-                  </button>
+        setGoalInput("");
+      }}
+      style={{
+    padding: "8px 14px",
+    fontSize: "13px",
+    borderRadius: "12px",
+    border: "none",
+    background:
+      "linear-gradient(135deg,#8B5CF6,#6D28D9)",
+    color: "white",
+    fontWeight: "600",
+    cursor: "pointer",
+    boxShadow:
+      "0 0 15px rgba(139,92,246,0.35)",
+  }}
+>
+  <span style={{ marginRight: "6px" }}>+</span>
+  Add Goal
+</button>
+  </div>
 
-                  <div style={{ marginTop: "20px" }}>
-                    {goals.map((goal, index) => (
-                      <div
-                        key={index}
-                        onClick={() => {
-                          const updated = [...goals];
+  <div style={{ marginTop: "20px" }}>
+                    <div className="goals-list">
+  {goals.map((goal, index) => (
+    <div
+      key={index}
+      className={`goal-card ${
+        goal.done ? "completed" : ""
+      }`}
+    >
+      <div className="goal-left">
+        <span
+  onClick={() => toggleGoal(index)}
+  style={{
+    cursor: "pointer",
+    fontSize: "22px",
+  }}
+>
+  {goal.done ? "✅" : "🎯"}
+</span>
 
-                          updated[index].done =
-                            !updated[index].done;
+        <span className="goal-text">
+          {goal.text}
+        </span>
+      </div>
 
-                          setGoals(updated);
-                        }}
-                        style={{
-                          cursor: "pointer",
-                          marginBottom: "10px",
-                          textDecoration:
-                            goal.done
-                              ? "line-through"
-                              : "none",
-                        }}
-                      >
-                        {goal.done ? "✅" : "🎯"} {goal.text}
-                      </div>
-                    ))}
+      <button
+        className="delete-goal"
+        onClick={() =>
+          setGoals(
+            goals.filter((_, i) => i !== index)
+          )
+        }
+      >
+        ✕
+      </button>
+    </div>
+  ))}
+</div>
                   </div>
                 </>
               </div>
