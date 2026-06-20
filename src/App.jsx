@@ -107,13 +107,13 @@ function App() {
           id: 1,
           title: "Portfolio Ideas",
           content: "",
-          color: "#FFD166",
+          color: "#ee4ab7",
         },
         {
           id: 2,
           title: "Instagram Content",
           content: "",
-          color: "#C77DFF",
+          color: "#67c7f7",
         },
       ]
   );
