@@ -69,11 +69,15 @@ function App() {
     useState("Saved");
   // NOTE: completedTasks now stores line INDEXES (numbers), not task text.
   // This is what makes duplicate-named tasks work correctly.
-  const [completedTasks, setCompletedTasks] = useState(
-    JSON.parse(
+  const [completedTasks, setCompletedTasks] = useState(() => {
+    const saved = JSON.parse(
       localStorage.getItem("mindcanvas-completed")
-    ) || []
-  );
+    ) || [];
+    // Old versions stored task TEXT (strings) instead of line index (numbers).
+    // If we detect old-format data, discard it safely — it can't be
+    // converted reliably, so starting clean here is correct and final.
+    return saved.every((item) => typeof item === "number") ? saved : [];
+  });
   useEffect(() => {
     localStorage.setItem(
       "mindcanvas-completed",
@@ -148,6 +152,20 @@ function App() {
   const tasks = noteLines
     .map((line, idx) => ({ line, idx }))
     .filter((item) => item.line.trim().startsWith("-"));
+
+  // Self-healing guard: if completedTasks contains any ID that no longer
+  // matches a real task (e.g. stale data from an old version, or a task
+  // that was deleted in a way that didn't clean up properly), strip it out
+  // automatically. This runs whenever the note changes, so it's always
+  // silently keeping completedTasks valid without any manual steps.
+  useEffect(() => {
+    const validIds = new Set(tasks.map((t) => t.idx));
+    const cleaned = completedTasks.filter((id) => validIds.has(id));
+
+    if (cleaned.length !== completedTasks.length) {
+      setCompletedTasks(cleaned);
+    }
+  }, [note]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const wordCount = note.trim()
     ? note.trim().split(/\s+/).length
