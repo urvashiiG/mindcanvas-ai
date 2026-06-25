@@ -543,6 +543,7 @@ const isMobile = window.innerWidth < 768;
           style={{
             minWidth: 0,
             paddingLeft: isMobile ? "0" : "10px",
+            paddingTop: isMobile ? "55px" : "0",
             gridArea: "main",
           }}
         >
@@ -794,10 +795,11 @@ const isMobile = window.innerWidth < 768;
       className={`goal-card ${
         goal.done ? "completed" : ""
       }`}
+      onClick={() => toggleGoal(index)}
+      style={{ cursor: "pointer" }}
     >
       <div className="goal-left">
         <span
-  onClick={() => toggleGoal(index)}
   style={{
     cursor: "pointer",
     fontSize: "22px",
@@ -813,11 +815,12 @@ const isMobile = window.innerWidth < 768;
 
       <button
         className="delete-goal"
-        onClick={() =>
+        onClick={(e) => {
+          e.stopPropagation();
           setGoals(
             goals.filter((_, i) => i !== index)
-          )
-        }
+          );
+        }}
       >
         ✕
       </button>
@@ -1048,7 +1051,6 @@ const isMobile = window.innerWidth < 768;
                 style={{
                   fontSize: isMobile ? "28px" : "48px",
                   margin: 0,
-                  paddingTop: isMobile ? "55px" : "0",
                   textAlign: isMobile ? "center" : "left",
                 }}
               >
