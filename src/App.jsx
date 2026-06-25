@@ -67,6 +67,8 @@ function App() {
   );
   const [saveStatus, setSaveStatus] =
     useState("Saved");
+  // NOTE: completedTasks now stores line INDEXES (numbers), not task text.
+  // This is what makes duplicate-named tasks work correctly.
   const [completedTasks, setCompletedTasks] = useState(
     JSON.parse(
       localStorage.getItem("mindcanvas-completed")
@@ -138,9 +140,15 @@ function App() {
       JSON.stringify(stickyNotes)
     );
   }, [stickyNotes]);
-  const tasks = note
-    .split("\n")
-    .filter((line) => line.trim().startsWith("-"));
+
+  // FIX: tasks now carry their original line index (idx) as a stable ID.
+  // This ID is what we use everywhere instead of task text, so duplicate
+  // task names ("Exercise" twice) are tracked independently and correctly.
+  const noteLines = note.split("\n");
+  const tasks = noteLines
+    .map((line, idx) => ({ line, idx }))
+    .filter((item) => item.line.trim().startsWith("-"));
+
   const wordCount = note.trim()
     ? note.trim().split(/\s+/).length
     : 0;
@@ -622,35 +630,25 @@ const isMobile = window.innerWidth < 768;
                   borderRadius: "20px",
                 }}
               >
-                {tasks.map((task, index) => {
-                  const cleanTask = task.replace("-", "").trim();
+                {tasks.map((task) => {
+                  const cleanTask = task.line.replace("-", "").trim();
+                  const isDone = completedTasks.includes(task.idx);
 
                   return (
                     <div
-  key={index}
-  className={`task-card ${
-    completedTasks.includes(cleanTask)
-      ? "completed"
-      : ""
-  }`}
+  key={task.idx}
+  className={`task-card ${isDone ? "completed" : ""}`}
   onClick={() => {
-    if (completedTasks.includes(cleanTask)) {
+    if (isDone) {
       setCompletedTasks(
-        completedTasks.filter(
-          (t) => t !== cleanTask
-        )
+        completedTasks.filter((id) => id !== task.idx)
       );
     } else {
-      setCompletedTasks([
-        ...completedTasks,
-        cleanTask,
-      ]);
+      setCompletedTasks([...completedTasks, task.idx]);
     }
   }}
 >
-                      {completedTasks.includes(cleanTask)
-                        ? "☑"
-                        : getTaskIcon(cleanTask)}
+                      {isDone ? "☑" : getTaskIcon(cleanTask)}
 
                       {" "}
                       {cleanTask}
@@ -659,18 +657,22 @@ const isMobile = window.innerWidth < 768;
   onClick={(e) => {
     e.stopPropagation();
 
-    const updatedNote = note
-      .split("\n")
-      .filter((line) => {
-        const cleanLine = line
-          .replace("-", "")
-          .trim();
+    // Remove this exact line by its index (not by matching text),
+    // so duplicate-named tasks aren't all deleted together.
+    const updatedLines = noteLines.filter(
+      (_, i) => i !== task.idx
+    );
 
-        return cleanLine !== cleanTask;
-      })
-      .join("\n");
+    setNote(updatedLines.join("\n"));
 
-    setNote(updatedNote);
+    // Shift down any completed IDs that were below the deleted line,
+    // since their line index just decreased by 1. This keeps the
+    // completed count accurate after deletion.
+    setCompletedTasks(
+      completedTasks
+        .filter((id) => id !== task.idx)
+        .map((id) => (id > task.idx ? id - 1 : id))
+    );
   }}
 >
   ✕
@@ -1094,20 +1096,22 @@ Example:
                     🚀 No tasks yet. Add tasks in Notes using "-"
                   </p>
                 )}
-                {tasks.map((line, index) => (
-                  <div
-                    key={index}
-                    onClick={() => {
-                      const task = line.replace("-", "").trim();
+                {tasks.map((task) => {
+                  const cleanTask = task.line.replace("-", "").trim();
+                  const isDone = completedTasks.includes(task.idx);
 
-                      if (completedTasks.includes(task)) {
+                  return (
+                  <div
+                    key={task.idx}
+                    onClick={() => {
+                      if (isDone) {
                         setCompletedTasks(
-                          completedTasks.filter((t) => t !== task)
+                          completedTasks.filter((id) => id !== task.idx)
                         );
                       } else {
                         setCompletedTasks([
                           ...completedTasks,
-                          task,
+                          task.idx,
                         ]);
                       }
                     }}
@@ -1121,17 +1125,9 @@ Example:
                       borderRadius: "14px",
                       marginBottom: "12px",
 
-                      textDecoration: completedTasks.includes(
-                        line.replace("-", "").trim()
-                      )
-                        ? "line-through"
-                        : "none",
+                      textDecoration: isDone ? "line-through" : "none",
 
-                      opacity: completedTasks.includes(
-                        line.replace("-", "").trim()
-                      )
-                        ? 0.5
-                        : 1,
+                      opacity: isDone ? 0.5 : 1,
 
                       transition: "0.3s",
                     }}
@@ -1144,21 +1140,16 @@ Example:
                       }}
                     >
                       <span>
-                        {completedTasks.includes(
-                          line.replace("-", "").trim()
-                        )
-                          ? "☑"
-                          : getTaskIcon(
-                            line.replace("-", "").trim()
-                          )}
+                        {isDone ? "☑" : getTaskIcon(cleanTask)}
                       </span>
 
                       <span>
-                        {line.replace("-", "").trim()}
+                        {cleanTask}
                       </span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
               </div>
               {/* Sticky Notes */}
@@ -1403,11 +1394,14 @@ Example:
                 fontSize: "14px",
               }}
             >
-              {completedTasks.length} / {tasks.length} Tasks Completed (
+              {Math.min(completedTasks.length, tasks.length)} / {tasks.length} Tasks Completed (
               {tasks.length
-                ? Math.round(
-                  (completedTasks.length / tasks.length) * 100
-                )
+                ? Math.min(
+                    100,
+                    Math.round(
+                      (completedTasks.length / tasks.length) * 100
+                    )
+                  )
                 : 0}
               %)
             </p>
@@ -1425,7 +1419,7 @@ Example:
               <div
                 style={{
                   width: `${tasks.length
-                    ? (completedTasks.length / tasks.length) * 100
+                    ? Math.min(100, (completedTasks.length / tasks.length) * 100)
                     : 0
                     }%`,
                   height: "100%",
@@ -1474,7 +1468,7 @@ Example:
             <p>🎯 Focus Today</p>
             <small>
               Complete remaining{" "}
-              {tasks.length - completedTasks.length} tasks.
+              {Math.max(0, tasks.length - completedTasks.length)} tasks.
             </small>
           </div>
 
@@ -1488,7 +1482,7 @@ Example:
           >
             <p>📈 Productivity</p>
             <small>
-              {tasks.length - completedTasks.length} tasks pending.
+              {Math.max(0, tasks.length - completedTasks.length)} tasks pending.
             </small>
           </div>
 
